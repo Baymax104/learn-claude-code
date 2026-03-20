@@ -29,6 +29,7 @@ import subprocess
 
 from anthropic import Anthropic
 from dotenv import load_dotenv
+from icecream import ic
 
 load_dotenv(override=True)
 
@@ -105,3 +106,4 @@ if __name__ == "__main__":
                 if hasattr(block, "text"):
                     print(block.text)
         print()
+    ic(history)

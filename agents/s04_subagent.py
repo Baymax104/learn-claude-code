@@ -39,7 +39,7 @@ WORKDIR = Path.cwd()
 client = Anthropic(base_url=os.getenv("ANTHROPIC_BASE_URL"))
 MODEL = os.environ["MODEL_ID"]
 
-SYSTEM = f"You are a coding agent at {WORKDIR}. Use the task tool to delegate exploration or subtasks."
+SYSTEM = f"You are a coding agent at {WORKDIR}. Split task and use the task tool to delegate exploration or subtasks."
 SUBAGENT_SYSTEM = f"You are a coding subagent at {WORKDIR}. Complete the given task, then summarize your findings."
 
 
@@ -126,8 +126,10 @@ def run_subagent(prompt: str) -> str:
         results = []
         for block in response.content:
             if block.type == "tool_use":
+                print(f"Child > {block.name}: {block.input}")
                 handler = TOOL_HANDLERS.get(block.name)
                 output = handler(**block.input) if handler else f"Unknown tool: {block.name}"
+                print(f"Child > {block.name}: {str(output)[:200]}")
                 results.append({"type": "tool_result", "tool_use_id": block.id, "content": str(output)[:50000]})
         sub_messages.append({"role": "user", "content": results})
     # Only the final text returns to the parent -- child context is discarded
@@ -136,8 +138,18 @@ def run_subagent(prompt: str) -> str:
 
 # -- Parent tools: base tools + task dispatcher --
 PARENT_TOOLS = CHILD_TOOLS + [
-    {"name": "task", "description": "Spawn a subagent with fresh context. It shares the filesystem but not conversation history.",
-     "input_schema": {"type": "object", "properties": {"prompt": {"type": "string"}, "description": {"type": "string", "description": "Short description of the task"}}, "required": ["prompt"]}},
+    {
+        "name": "task",
+        "description": "Spawn a subagent with fresh context. It shares the filesystem but not conversation history.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "prompt": {"type": "string"},
+                "description": {"type": "string", "description": "Short description of the task"}
+            },
+            "required": ["prompt"]
+        }
+    },
 ]
 
 
@@ -155,12 +167,13 @@ def agent_loop(messages: list):
             if block.type == "tool_use":
                 if block.name == "task":
                     desc = block.input.get("description", "subtask")
-                    print(f"> task ({desc}): {block.input['prompt'][:80]}")
+                    print(f"> task ({desc}): {block.input['prompt']}")
                     output = run_subagent(block.input["prompt"])
                 else:
+                    print(f"> {block.name}: {block.input}")
                     handler = TOOL_HANDLERS.get(block.name)
                     output = handler(**block.input) if handler else f"Unknown tool: {block.name}"
-                print(f"  {str(output)[:200]}")
+                print(f"> {block.name}: {str(output)[:200]}")
                 results.append({"type": "tool_result", "tool_use_id": block.id, "content": str(output)})
         messages.append({"role": "user", "content": results})
 
