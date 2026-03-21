@@ -7,8 +7,18 @@ dependencies = [
     "anthropic>=0.25.0",
     "icecream>=2.1.10",
     "python-dotenv>=1.0.0",
+    "rich>=14.3.3",
+    "rootutils>=1.0.7",
 ]
 
 [[tool.uv.index]]
-url = "https://mirrors.aliyun.com/pypi/simple"
+url = "https://mirrors.aliyun.com/pypi/simple/"
 default = true
+
+[dependency-groups]
+dev = [
+    "ruff>=0.15.7",
+]
+
+[tool.ruff.lint]
+ignore = ["E402"]
