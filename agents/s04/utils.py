@@ -1,0 +1,19 @@
+# -*- coding: UTF-8 -*-
+import os
+from functools import partial
+
+from anthropic import Anthropic
+from dotenv import load_dotenv
+
+load_dotenv(override=True)
+if os.getenv("ANTHROPIC_BASE_URL"):
+    os.environ.pop("ANTHROPIC_AUTH_TOKEN", None)
+
+client = Anthropic(base_url=os.getenv("ANTHROPIC_BASE_URL"))
+MODEL = os.environ["MODEL_ID"]
+
+ask_llm = partial(
+    client.messages.create,
+    model=MODEL,
+    max_tokens=8000
+)
