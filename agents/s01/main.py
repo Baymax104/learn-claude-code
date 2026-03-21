@@ -1,5 +1,4 @@
-#!/usr/bin/env python3
-# Harness: the loop -- the model's first connection to the real world.
+# -*- coding: UTF-8 -*-
 """
 s01_agent_loop.py - The Agent Loop
 
@@ -24,53 +23,25 @@ until the model decides to stop. Production agents layer
 policy, hooks, and lifecycle controls on top.
 """
 
-import os
-import subprocess
+from pathlib import Path
 
-from anthropic import Anthropic
-from dotenv import load_dotenv
-from icecream import ic
+from rich import print
+from tools import TOOLS, run_bash
+from utils import ask_llm
 
-load_dotenv(override=True)
+WORKDIR = Path(__file__).parent
 
-if os.getenv("ANTHROPIC_BASE_URL"):
-    os.environ.pop("ANTHROPIC_AUTH_TOKEN", None)
-
-client = Anthropic(base_url=os.getenv("ANTHROPIC_BASE_URL"))
-MODEL = os.environ["MODEL_ID"]
-
-SYSTEM = f"You are a coding agent at {os.getcwd()}. Use bash to solve tasks. Act, don't explain."
-
-TOOLS = [{
-    "name": "bash",
-    "description": "Run a shell command.",
-    "input_schema": {
-        "type": "object",
-        "properties": {"command": {"type": "string"}},
-        "required": ["command"],
-    },
-}]
-
-
-def run_bash(command: str) -> str:
-    dangerous = ["rm -rf /", "sudo", "shutdown", "reboot", "> /dev/"]
-    if any(d in command for d in dangerous):
-        return "Error: Dangerous command blocked"
-    try:
-        r = subprocess.run(command, shell=True, cwd=os.getcwd(),
-                           capture_output=True, text=True, timeout=120)
-        out = (r.stdout + r.stderr).strip()
-        return out[:50000] if out else "(no output)"
-    except subprocess.TimeoutExpired:
-        return "Error: Timeout (120s)"
+SYSTEM = f"You are a coding agent at {WORKDIR}. Use bash to solve tasks. Act, don't explain."
 
 
 # -- The core pattern: a while loop that calls tools until the model stops --
 def agent_loop(messages: list):
+    """执行用户的单次输入"""
     while True:
-        response = client.messages.create(
-            model=MODEL, system=SYSTEM, messages=messages,
-            tools=TOOLS, max_tokens=8000,
+        response = ask_llm(
+            system=SYSTEM,
+            messages=messages,
+            tools=TOOLS,
         )
         # Append assistant turn
         messages.append({"role": "assistant", "content": response.content})
@@ -81,11 +52,11 @@ def agent_loop(messages: list):
         results = []
         for block in response.content:
             if block.type == "tool_use":
-                print(f"\033[33m$ {block.input['command']}\033[0m")
+                print(f"[yellow]$ {block.input['command']}")
                 output = run_bash(block.input["command"])
                 print(output[:200])
-                results.append({"type": "tool_result", "tool_use_id": block.id,
-                                "content": output})
+                results.append({"type": "tool_result", "tool_use_id": block.id, "content": output})
+        # tool_result list as user message so that agent can know the tool result
         messages.append({"role": "user", "content": results})
 
 
@@ -106,4 +77,3 @@ if __name__ == "__main__":
                 if hasattr(block, "text"):
                     print(block.text)
         print()
-    ic(history)
